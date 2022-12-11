@@ -102,12 +102,20 @@ counts %>%
 
 
 # Stacked barplot ---------------------------------------------------------
-counts
+library(RColorBrewer)
+library(ggnewscale)
 
+# Transform counts into relative abundances
 rel_counts <- apply(counts, 2, function(x){x/sum(x)})
 
+#' Determine the most abundant genera. 
+#' 
+#' This will be useful if I want to work with the most abundant genera
+#' and collapse the other genera into "Others".
+#' 
+#' FOR THE MOMENT, THIS IS NOT USED IN THE ANALYSIS.
 most_abundant_genera <- rel_counts %>% 
-        t %>% 
+        t() %>% 
         as_data_frame() %>% 
         pivot_longer(cols = everything(),
                      names_to = "taxa",
@@ -119,43 +127,126 @@ most_abundant_genera <- rel_counts %>%
         slice_max(order_by = mean_abundance, n = 14) %>% 
         pull(taxa)
 
-Sample_ID <- rownames(t(rel_counts))
-library(RColorBrewer)
+# Colors for the Phylums that appeared in the analysis
 my_cols_phylum <- c(brewer.pal(7, "Dark2"),
                     brewer.pal(3, "Set1"),
                     "grey50")
 
-my_cols_class <- c(brewer.pal(7, "Dark2"),
-                    brewer.pal(7, "Set3"),
-                    "grey50")
+# Colors to identify the treatments the samples underwent 
+my_cols_treatment <- c(brewer.pal(4, "Paired")[c(1,3)])
 
-# Stacked barplot with phylum
+#' Names of the samples in each group: either escitalopram or water.
+#' This will be useful to reorder the samples in the plot with the bars
+samples_escitalopram <- metadata %>% 
+        filter(Treatment == "Escitalopram") %>% 
+        pull(Sample_ID)
+
+samples_water <- metadata %>% 
+        filter(Treatment == "Water") %>% 
+        pull(Sample_ID)
+
+
+#' Stacked barplot with phylum
 #' 2: Phylum
 #' 3: Class
 #' 4: Order
 #' 5: Family
-#' 6: Genus 
-t_rel_counts %>%
+#' 6: Genus
+
+# This is to add the column with the Samples_ID to the dataframe
+Sample_ID <- rownames(t(rel_counts))
+
+
+#' Reorder the phylums for the final stacked barplot
+phylums <- t_rel_counts %>%
         as_data_frame() %>% 
+        # Here I added the names of the samples as column
         mutate(Sample_ID = Sample_ID) %>% 
         pivot_longer(cols = !matches("Sample_ID"),
                      names_to = "taxa",
                      values_to = "abundance") %>% 
-        # Change start to change the taxonomy level used in the plot
-        mutate(taxa = word(taxa, start = 3, end = -1, sep = "_"),
-               taxa = str_replace_all(taxa, "_.*", "")) %>% 
-        inner_join(x = ., y = metadata, by = "Sample_ID") %>% 
         
-        ggplot(aes(x = Sample_ID, y = abundance, fill = taxa, color = taxa)) +
+        # Change start to change the taxonomy level used in the plot
+        mutate(Phylum = word(taxa, start = 2, end = -1, sep = "_"),
+               Phylum = str_replace_all(Phylum, "_.*", "")) %>% 
+        pull(Phylum) %>% 
+        unique()
+
+phylums <- c("Firmicutes", phylums[phylums != "Firmicutes"])
+
+
+t_rel_counts %>%
+        as_data_frame() %>% 
+        # Here I added the names of the samples as column
+        mutate(Sample_ID = Sample_ID) %>% 
+        pivot_longer(cols = !matches("Sample_ID"),
+                     names_to = "taxa",
+                     values_to = "abundance") %>% 
+        
+        # Change start to change the taxonomy level used in the plot
+        mutate(Phylum = word(taxa, start = 2, end = -1, sep = "_"),
+               Phylum = str_replace_all(Phylum, "_.*", "")) %>% 
+        inner_join(x = ., y = metadata, by = "Sample_ID") %>% 
+        mutate(Sample_ID = factor(x = Sample_ID, 
+                                  levels = c(samples_escitalopram,
+                                             samples_water)),
+               Phylum = factor(x = Phylum,
+                               levels = phylums)) %>% 
+        
+        ggplot(aes(x = Sample_ID, y = abundance, fill = Phylum, color = Phylum)) +
+        
         geom_col() +
         
-        facet_grid(Nestbuilding~Treatment, scales = "free") +
+        facet_grid(.~Nestbuilding, scales = "free") +
         
-        scale_color_manual(values = my_cols_class) +
-        scale_fill_manual(values = my_cols_class) +
-        scale_y_continuous(labels = paste0(c(0, 25, 50, 75, 100), "%"), expand = c(0,0))
+        scale_color_manual(values = my_cols_phylum) +
+        scale_fill_manual(values = my_cols_phylum) +
         
-
+        scale_y_continuous(labels = paste0(c(0, 25, 50, 75, 100), "%"), 
+                           expand = c(0,0)) +
+        scale_x_discrete(expand = c(0,0)) +
+        
+        new_scale_fill() +
+        new_scale_color() +
+        
+        geom_tile(inherit.aes = FALSE,
+                  aes(x = Sample_ID, y = -0.03, 
+                      fill = Treatment, color = Treatment), 
+                  height = 0.05, show.legend = FALSE) +
+        
+        scale_color_manual(values = my_cols_treatment) +
+        scale_fill_manual(values = my_cols_treatment) +
+        
+        labs(x = "",
+             y = "Relative abundance") +
+        
+        # 21 samples / 4 to be centered in the corresponding color
+        annotate(geom = "text", 
+                 x = 5.5, y = -0.03, 
+                 label = "Water", 
+                 size = 5) +
+        annotate(geom = "text", 
+                 x = 15.8, y = -0.03, 
+                 label = "Escitalopram",
+                 size = 5) +
+        
+        theme_bw() + 
+        theme(panel.grid.major.x = element_blank(),
+              panel.grid.minor.y = element_blank(),
+             
+              strip.text.x = element_text(size = 12, color = "white"),
+              strip.background = element_rect(fill = "grey30",
+                                              color = "grey30"),
+              
+              legend.title = element_text(size = 14),
+              legend.text = element_text(size = 12),
+              
+              axis.ticks = element_blank(),
+              
+              axis.text.x = element_blank(),
+              axis.text.y = element_text(size = 12),
+              axis.title.y = element_text(size = 14))
+        
 
 # Alpha diversity ---------------------------------------------------------
 library(ggh4x)
