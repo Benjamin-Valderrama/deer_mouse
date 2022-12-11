@@ -27,7 +27,7 @@ counts = counts[,metadata$Sample_ID]
 
 #' TO DO LIST:
 #'
-#' 0. Stacked barplot with the composition of the microbiome
+#' 0. Stacked barplot with the composition of the microbiome [DONE]
 #' 
 #' 1. ALPHA DIV [DONE]
 #'     shannon [DONE]
@@ -129,7 +129,7 @@ most_abundant_genera <- rel_counts %>%
 
 # Colors for the Phylums that appeared in the analysis
 my_cols_phylum <- c(brewer.pal(7, "Dark2"),
-                    brewer.pal(3, "Set1"),
+                    brewer.pal(7, "Set1")[c(2,7,5)],
                     "grey50")
 
 # Colors to identify the treatments the samples underwent 
@@ -249,6 +249,7 @@ t_rel_counts %>%
               axis.text.y = element_text(size = 12),
               axis.title.y = element_text(size = 14))
         
+
 
 # Alpha diversity ---------------------------------------------------------
 library(ggh4x)
