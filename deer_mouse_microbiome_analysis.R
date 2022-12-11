@@ -14,7 +14,7 @@ library(tidyverse)
 library(Tjazi)
 
 #Define working directory
-setwd(paste0(getwd(), "/southafrica_study/"))
+#setwd(paste0(getwd(), "//"))
 
 set.seed(12345)
 #load data
@@ -40,7 +40,7 @@ counts = counts[,metadata$Sample_ID]
 #'     Plot [DONE]
 #'     
 #' 3. DIF ABUND [DONE]
-#'     GENUS fw_glm(F = ~ Treatment * Nestbuilding + plate) [DONE]
+#'     GENUS fw_glm(F = ~ Treatment * Nestbuilding + plate) 2[DONE]
 #'     GBM [DONE]
 #'     GMM [DONE]
 #'     
@@ -98,6 +98,63 @@ counts %>%
         legend.position = c(0.6, 0.15))
 
 
+
+
+
+# Stacked barplot ---------------------------------------------------------
+counts
+
+rel_counts <- apply(counts, 2, function(x){x/sum(x)})
+
+most_abundant_genera <- rel_counts %>% 
+        t %>% 
+        as_data_frame() %>% 
+        pivot_longer(cols = everything(),
+                     names_to = "taxa",
+                     values_to = "abundance") %>% 
+        mutate(taxa = word(taxa, start = 5, end = -1, sep = "_")) %>% 
+        group_by(taxa) %>% 
+        summarise(mean_abundance = mean(abundance)) %>% 
+        filter(!str_detect(taxa, "Unknown")) %>% 
+        slice_max(order_by = mean_abundance, n = 14) %>% 
+        pull(taxa)
+
+Sample_ID <- rownames(t(rel_counts))
+library(RColorBrewer)
+my_cols_phylum <- c(brewer.pal(7, "Dark2"),
+                    brewer.pal(3, "Set1"),
+                    "grey50")
+
+my_cols_class <- c(brewer.pal(7, "Dark2"),
+                    brewer.pal(7, "Set3"),
+                    "grey50")
+
+# Stacked barplot with phylum
+#' 2: Phylum
+#' 3: Class
+#' 4: Order
+#' 5: Family
+#' 6: Genus 
+t_rel_counts %>%
+        as_data_frame() %>% 
+        mutate(Sample_ID = Sample_ID) %>% 
+        pivot_longer(cols = !matches("Sample_ID"),
+                     names_to = "taxa",
+                     values_to = "abundance") %>% 
+        # Change start to change the taxonomy level used in the plot
+        mutate(taxa = word(taxa, start = 3, end = -1, sep = "_"),
+               taxa = str_replace_all(taxa, "_.*", "")) %>% 
+        inner_join(x = ., y = metadata, by = "Sample_ID") %>% 
+        
+        ggplot(aes(x = Sample_ID, y = abundance, fill = taxa, color = taxa)) +
+        geom_col() +
+        
+        facet_grid(Nestbuilding~Treatment, scales = "free") +
+        
+        scale_color_manual(values = my_cols_class) +
+        scale_fill_manual(values = my_cols_class) +
+        scale_y_continuous(labels = paste0(c(0, 25, 50, 75, 100), "%"), expand = c(0,0))
+        
 
 
 # Alpha diversity ---------------------------------------------------------
