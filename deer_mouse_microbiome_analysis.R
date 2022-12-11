@@ -199,8 +199,10 @@ t_rel_counts %>%
         
         facet_grid(.~Nestbuilding, scales = "free") +
         
-        scale_color_manual(values = my_cols_phylum) +
-        scale_fill_manual(values = my_cols_phylum) +
+        scale_color_manual(values = my_cols_phylum,
+                           breaks = sort(phylums)) +
+        scale_fill_manual(values = my_cols_phylum,
+                          breaks = sort(phylums)) +
         
         scale_y_continuous(labels = paste0(c(0, 25, 50, 75, 100), "%"), 
                            expand = c(0,0)) +
