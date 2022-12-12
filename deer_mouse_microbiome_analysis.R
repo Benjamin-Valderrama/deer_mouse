@@ -14,7 +14,7 @@ library(tidyverse)
 library(Tjazi)
 
 #Define working directory
-#setwd(paste0(getwd(), "//"))
+setwd(paste0(getwd(), "/deer_mouse"))
 
 set.seed(12345)
 #load data
@@ -53,8 +53,8 @@ counts = counts[,metadata$Sample_ID]
 #' 
 #' 6. Figures for the paper:
 #' 
-#' 1) alpha-div, beta-div and stacked barplot
-#' 2) GBM and GMM
+#' 1) alpha-div, beta-div and stacked barplot [DONE]
+#' 2) GBM and GMM -> Need to incorporate the effect size on the right side of the GBM plot
 #' 3) Plasma vs Tryptophan
 
 
@@ -77,6 +77,8 @@ counts %>%
                names_to = "Sample_ID",
                values_to = "Counts") %>% 
   left_join(., metadata, by = "Sample_ID") %>% 
+  
+  # Look at the strains that showed differential abundances in the previous study
   filter(!is.na(Nestbuilding) & str_detect(Strain, "Prevotella|Anaeroplasma|Desulfo|Aestuari|Peptococcus|Holdemanella") & Counts > 0) %>% 
   mutate(Nestbuilding = factor(Nestbuilding, levels = c("NNB", "LNB"))) %>% 
   ggplot(aes(x = Nestbuilding, y = Counts, fill = Nestbuilding)) +
@@ -116,7 +118,7 @@ rel_counts <- apply(counts, 2, function(x){x/sum(x)})
 #' FOR THE MOMENT, THIS IS NOT USED IN THE ANALYSIS.
 most_abundant_genera <- rel_counts %>% 
         t() %>% 
-        as_data_frame() %>% 
+        as_tibble() %>% 
         pivot_longer(cols = everything(),
                      names_to = "taxa",
                      values_to = "abundance") %>% 
@@ -133,7 +135,7 @@ my_cols_phylum <- c(brewer.pal(7, "Dark2"),
                     "grey50")
 
 # Colors to identify the treatments the samples underwent 
-my_cols_treatment <- c(brewer.pal(4, "Paired")[c(1,3)])
+my_cols_treatment <- c(brewer.pal(8, "Paired")[c(1,7)])
 
 #' Names of the samples in each group: either escitalopram or water.
 #' This will be useful to reorder the samples in the plot with the bars
@@ -158,7 +160,8 @@ Sample_ID <- rownames(t(rel_counts))
 
 
 #' Reorder the phylums for the final stacked barplot
-phylums <- t_rel_counts %>%
+phylums <- rel_counts %>%
+        t() %>% 
         as_data_frame() %>% 
         # Here I added the names of the samples as column
         mutate(Sample_ID = Sample_ID) %>% 
@@ -175,7 +178,17 @@ phylums <- t_rel_counts %>%
 phylums <- c("Firmicutes", phylums[phylums != "Firmicutes"])
 
 
-t_rel_counts %>%
+cols <- c(brewer.pal(12, "Set3")[c(2:4)],
+          brewer.pal(12, "Set3")[c(7,8)],
+          brewer.pal(8, "Pastel2")[7],
+          brewer.pal(12, "Set3")[c(1, 10:12)],
+          "grey50")
+
+#cols[phylums == "Unknown"] = "grey50"
+
+
+plot_composition <- rel_counts %>%
+        t() %>% 
         as_data_frame() %>% 
         # Here I added the names of the samples as column
         mutate(Sample_ID = Sample_ID) %>% 
@@ -199,9 +212,9 @@ t_rel_counts %>%
         
         facet_grid(.~Nestbuilding, scales = "free") +
         
-        scale_color_manual(values = my_cols_phylum,
+        scale_color_manual(values = cols,
                            breaks = sort(phylums)) +
-        scale_fill_manual(values = my_cols_phylum,
+        scale_fill_manual(values = cols,
                           breaks = sort(phylums)) +
         
         scale_y_continuous(labels = paste0(c(0, 25, 50, 75, 100), "%"), 
@@ -222,44 +235,41 @@ t_rel_counts %>%
         labs(x = "",
              y = "Relative abundance") +
         
-        # 21 samples / 4 to be centered in the corresponding color
-        annotate(geom = "text", 
-                 x = 5.5, y = -0.03, 
-                 label = "Water", 
-                 size = 5) +
-        annotate(geom = "text", 
-                 x = 15.8, y = -0.03, 
-                 label = "Escitalopram",
-                 size = 5) +
-        
+        ggtitle("C") +
+  
         theme_bw() + 
         theme(panel.grid.major.x = element_blank(),
               panel.grid.minor.y = element_blank(),
              
-              strip.text.x = element_text(size = 12, color = "white"),
-              strip.background = element_rect(fill = "grey30",
-                                              color = "grey30"),
+              strip.text.x = element_text(size = 16, face = "bold"),
+              # strip.background = element_rect(fill = "grey30",
+              #                                 color = "grey30"),
               
-              legend.title = element_text(size = 14),
-              legend.text = element_text(size = 12),
+              legend.title = element_blank(),
+              legend.text = element_text(size = 16),
+              legend.position = "bottom",
               
               axis.ticks = element_blank(),
               
               axis.text.x = element_blank(),
               axis.text.y = element_text(size = 12),
-              axis.title.y = element_text(size = 14))
+              axis.title.y = element_text(size = 16),
+              
+              plot.title = element_text(size = 40, face = "bold", hjust = -0.1))
         
 
 
 # Alpha diversity ---------------------------------------------------------
 library(ggh4x)
 
+filling_colors <- brewer.pal(8, "Paired")[c(1:2,7:8)]
+
 alpha_diversity <- get_asymptotic_alpha(species = counts, verbose = FALSE)
 
 alpha_diversity$Nestbuilding <- metadata$Nestbuilding
 alpha_diversity$Treatment <- metadata$Treatment
 
-alpha_diversity %>% 
+plot_alpha_div <- alpha_diversity %>% 
   pivot_longer(cols = c("Chao1", "Simpson Index", "Shannon Entropy"), 
                values_to = "Values", 
                names_to = "Index") %>% 
@@ -267,8 +277,8 @@ alpha_diversity %>%
   # Add a new column with the full treatment name with an enter in between
   mutate(groups_axis = paste0(Nestbuilding,"\n",Treatment),
          groups_axis = factor(groups_axis, levels = c("NNB\nWater", "NNB\nEscitalopram", "LNB\nWater", "LNB\nEscitalopram")),
-         groups_legend = paste(Nestbuilding, Treatment),
-         groups_legend = factor(groups_legend, levels = c("NNB Water", "NNB Escitalopram", "LNB Water", "LNB Escitalopram"))) %>% 
+         groups_legend = paste0(Nestbuilding,"\n", Treatment),
+         groups_legend = factor(groups_legend, levels = c("NNB\nWater", "NNB\nEscitalopram", "LNB\nWater", "LNB\nEscitalopram"))) %>% 
   
   # Plotting
   ggplot(aes(x = groups_axis,
@@ -283,23 +293,28 @@ alpha_diversity %>%
   #                                     Index == "Shannon Entropy" ~ scale_y_continuous(breaks = seq(1.8, 2.5, length.out = 5)),
   #                                     Index == "Simpson Index" ~ scale_y_continuous(breaks = seq(0.60, 0.80, by = 0.05)))) +
   
-  scale_fill_brewer(type = "qual", palette = "Paired") +
+  scale_fill_manual(values = filling_colors) +
   
   ylab("") + 
   xlab("") + 
   labs(fill = "Treatment") + 
   
+  ggtitle("A") +
+    
   theme_bw() +
-  theme(axis.text.x = element_text(size = 12),
+  theme(axis.text.x = element_blank(),
+        axis.ticks.x = element_blank(),
         axis.text.y = element_text(size = 14),
         
         strip.text = element_text(size = 14, face = "bold"), 
         
-        legend.key.size = unit(0.4, units = "in"),
-        legend.text = element_text(size = 12),
-        legend.title = element_text(size = 14))
+        legend.key.size = unit(0.7, units = "in"),
+        legend.text = element_text(size = 16),
+        legend.title = element_blank(),
+        legend.position = "bottom",
+        plot.title = element_text(size = 40, face = "bold", hjust = -0.05))
 
-#ggsave(filename = "results/alpha_div.jpg", plot = last_plot(), width = 20, height = 12, units = "in")
+ggsave(filename = "results/alpha_div.jpg", plot = last_plot(), width = 20, height = 12, units = "in")
 
 
 alpha_diversity$plate <- metadata$plate
@@ -349,18 +364,26 @@ pca$Treatment  = metadata$Treatment
 pca$plate      = metadata$plate
 
 #Plot with ggplot2 
-ggplot(data = pca, aes(x = PC1, y = PC2, fill = Legend, colour = Legend))+
+plot_beta_div <- ggplot(data = pca, aes(x = PC1, y = PC2, fill = Legend, colour = Legend))+
   stat_ellipse(show.legend = FALSE) + 
-  geom_point(shape = 21, size = 5, colour = "black") + 
+  geom_point(shape = 21, size = 6, colour = "black") + 
   xlab(paste("PC1: ", pc1,  "%", sep="")) + 
   ylab(paste("PC2: ", pc2,  "%", sep="")) +
   theme_bw() + 
-  ggtitle("Principal Component Ananlysis of Microbiome Aitchison Distance") +
-  scale_color_brewer(type = "qual", palette = "Paired") +
-  scale_fill_brewer(type = "qual", palette = "Paired") +
-  coord_equal()
+  ggtitle("B") +
+  scale_color_manual(values = filling_colors) +
+  scale_fill_manual(values = filling_colors) +
+  theme(axis.text = element_text(size = 11),
+        axis.title = element_text(size = 16),
+        
+        # legend.key.size = unit(0.5, units = "in"),
+        # legend.text = element_text(size = 14),
+        # legend.title = element_text(size = 16),
+        legend.position = "none",
+        
+        plot.title = element_text(size = 40, face = "bold", hjust = -0.05))
 
-#ggsave(filename = "results/beta_div.jpg", plot = last_plot(), width = 12, height = 8, units = "in")
+ggsave(filename = "results/beta_div.jpg", plot = last_plot(), width = 12, height = 8, units = "in")
 
 
 # Calculate distance matrix
@@ -376,7 +399,22 @@ capture.output(x = vegan::adonis2(dist.genus ~ Treatment * Nestbuilding + plate,
 
 
 
-# Functional modules ------------------------------------------------------
+# Figure 1 : Alpha & Beta div + Composition -------------------------------
+
+library(patchwork)
+
+figure1 <- ((plot_alpha_div / plot_beta_div + plot_layout(guides = "keep")) | plot_composition) + 
+  plot_layout(guides = "auto",
+              widths = unit(c(10,6), c("in", "in")))
+
+
+ggsave("results/fig1.tiff", plot = figure1, device = "tiff", width = 20, height = 12, dpi = 300, units = "in")
+
+
+
+
+# GBM ---------------------------------------------------------------------
+
 
 set.seed(19970201)
 
@@ -454,9 +492,289 @@ hist(GMMs.glm$`TreatmentWater:NestbuildingNNB Pr(>|t|).BH`, xlim = c(0, 1), brea
 
 
 # Plot the GBM that show a group effect at q < 0.2 (For interaction between treatment and nestbuilding)
-GBM_BH <- clr_GBMs[GBMs.glm[GBMs.glm$`TreatmentWater:NestbuildingNNB Pr(>|t|).BH` < 0.2,"feature"],]
+GBM_BH_interaction <- clr_GBMs[GBMs.glm[GBMs.glm$`TreatmentWater:NestbuildingNNB Pr(>|t|).BH` < 0.2,"feature"],]
 
-GBM_BH %>%
+interesting_gbms <- "Acetate|Butyrate|Propionate|KADC|Nitric|Tryptophan|Quinolinic"
+
+#plot_gbm_interaction <- 
+GBM_BH_interaction %>%
+  t() %>% 
+  as.data.frame() %>%
+  add_column(Group = metadata$Treatment,
+             Nestbuilding = metadata$Nestbuilding, 
+             ID = metadata$plate) %>%
+  pivot_longer(!c("Group", "Nestbuilding", "ID")) %>% 
+  filter(str_detect(name, interesting_gbms)) %>% 
+  mutate(name = str_replace(name, ".*ales_", ""),
+         Group = factor(Group, levels = c("Water", "Escitalopram")),
+         Group_axis = paste(Nestbuilding, Group, sep = "\n"),
+         Group_legend = paste(Nestbuilding, Group),
+         Group_axis = factor(Group_axis, levels = c("NNB\nWater", "NNB\nEscitalopram", "LNB\nWater", "LNB\nEscitalopram")),
+         Group_legend = factor(Group_legend, levels = c("NNB Water", "NNB Escitalopram", "LNB Water", "LNB Escitalopram"))) %>% 
+  
+  ggplot(aes(x = Group_axis,
+             y = value,
+             color = Group_axis,
+             fill = Group_axis)) +
+  
+  #geom_violin(alpha = 0.5) +
+  geom_boxplot(alpha = 1/2, coef = 100) +
+  geom_point(shape = 21, size = 3, color = "black") +
+  
+  facet_wrap(~ name, scales = "free_y", ncol = 2) +
+  
+  scale_fill_manual(values = filling_colors) +
+  scale_color_manual(values = filling_colors) +
+  
+  ylab("") + xlab("") + 
+  
+  labs(color = "Groups", fill = "Groups") +
+  
+  theme_bw() + 
+  
+  theme(axis.text.x = element_blank(),
+        axis.ticks = element_blank(),
+        axis.text.y = element_text(size = 14),
+        
+        strip.text = element_text(size = 14, face = "bold"), 
+        
+        legend.key.size = unit(0.5, units = "in"),
+        legend.text = element_text(size = 16),
+        legend.title = element_text(size = 18, face = "bold"),
+        # legend.direction = "horizontal",
+        legend.position = "bottom") 
+
+# Saving the plot
+#ggsave(filename = "results/GBM_interaction_q02.jpg", plot = last_plot(), width = 20, height = 12, units = "in")
+
+
+
+
+# Plot the GBM that show a group effect at q < 0.2 (For Nestbuilding, which are the same conditions in the study 1)
+GBM_BH_nestbuilding <- clr_GBMs[GBMs.glm[GBMs.glm$`NestbuildingNNB Pr(>|t|).BH` < 0.2,"feature"],]
+
+plot_gbm_nestbuilding <- GBM_BH_nestbuilding %>%
+  t() %>% 
+  as.data.frame() %>%
+  add_column(Group = metadata$Treatment,
+             Nestbuilding = metadata$Nestbuilding, 
+             ID = metadata$plate) %>% 
+  pivot_longer(!c("Group", "Nestbuilding", "ID")) %>% 
+  filter(str_detect(name, interesting_gbms)) %>%
+  mutate(name = str_replace(name, ".*ales_", ""),
+         Group = factor(Group, levels = c("Water", "Escitalopram")),
+         Group_axis = factor(Nestbuilding, levels = c("NNB", "LNB"))) %>% 
+  #Group_axis = paste(Nestbuilding, Group, sep = "\n"),
+  #Group_legend = paste(Nestbuilding, Group),
+  #Group_axis = factor(Group_axis, levels = c("NNB\nWater", "NNB\nEscitalopram", "LNB\nWater", "LNB\nEscitalopram")),
+  #Group_legend = factor(Group_legend, levels = c("NNB Water", "NNB Escitalopram", "LNB Water", "LNB Escitalopram"))) %>% 
+  
+  ggplot(aes(x = Group_axis,
+             y = value,
+             color = Group_axis,
+             fill = Group_axis)) +
+  
+  #geom_violin(alpha = 0.5) +
+  geom_boxplot(alpha = 1/2, coef = 100) +
+  geom_point(shape = 21, size = 3, color = "black") +
+  
+  facet_wrap(~ name, scales = "free_y", ncol = 2) +
+  
+  scale_fill_manual(values = filling_colors[c(2,4)]) +
+  scale_color_manual(values = filling_colors[c(2,4)]) +
+  
+  ylab("") + xlab("") + 
+  
+  labs(color = "Groups", fill = "Groups") +
+  
+  theme_bw() + 
+  
+  theme(axis.text.x = element_text(size = 12),
+        axis.text.y = element_text(size = 14),
+        
+        strip.text = element_text(size = 14, face = "bold"), 
+        
+        legend.key.size = unit(0.8, units = "in"),
+        legend.text = element_text(size = 12),
+        legend.title = element_text(size = 14, face = "bold"),
+        legend.direction = "horizontal",
+        #legend.position = c(0.8, 0.15)
+        #legend.position = "none"
+        )
+
+
+#ggsave(filename = "results/GBM_nestbuilding_q02.jpg", plot = last_plot(), width = 20, height = 12, units = "in")
+
+
+
+
+# Plot the GBM that show a group effect at q < 0.2 (For Nestbuilding, which are the same conditions in the study 1)
+GBM_BH_treatment <- clr_GBMs[GBMs.glm[GBMs.glm$`TreatmentWater Pr(>|t|).BH` < 0.2,"feature"],]
+
+plot_gbm_treatment <- GBM_BH_treatment %>%
+  t() %>% 
+  as.data.frame() %>%
+  add_column(Group = metadata$Treatment,
+             Nestbuilding = metadata$Nestbuilding, 
+             ID = metadata$plate) %>% 
+  pivot_longer(!c("Group", "Nestbuilding", "ID")) %>% 
+  filter(str_detect(name, interesting_gbms)) %>%
+  mutate(name = str_replace(name, ".*ales_", ""),
+         Group_axis = factor(Group, levels = c("Water", "Escitalopram"))) %>% 
+  #Group_axis = paste(Nestbuilding, Group, sep = "\n"),
+  #Group_legend = paste(Nestbuilding, Group),
+  #Group_axis = factor(Group_axis, levels = c("NNB\nWater", "NNB\nEscitalopram", "LNB\nWater", "LNB\nEscitalopram")),
+  #Group_legend = factor(Group_legend, levels = c("NNB Water", "NNB Escitalopram", "LNB Water", "LNB Escitalopram"))) %>% 
+  
+  ggplot(aes(x = Group_axis,
+             y = value,
+             color = Group_axis,
+             fill = Group_axis)) +
+  
+  #geom_violin(alpha = 0.5) +
+  geom_boxplot(alpha = 1/2, coef = 100) +
+  geom_point(shape = 21, size = 3, color = "black") +
+  
+  facet_wrap(~ name, scales = "free_y", ncol = 3) +
+  
+  scale_fill_manual(values = c("grey60", "grey40")) +
+  scale_color_manual(values = c("grey60", "grey40")) +
+  
+  ylab("") + xlab("") + 
+  
+  labs(color = "Groups", fill = "Groups") +
+  
+  theme_bw() + 
+  
+  theme(axis.text.x = element_text(size = 12),
+        axis.text.y = element_text(size = 14),
+        
+        strip.text = element_text(size = 14, face = "bold"), 
+        
+        legend.key.size = unit(0.4, units = "in"),
+        legend.text = element_text(size = 12),
+        legend.title = element_text(size = 14, face = "bold"))
+
+
+#ggsave(filename = "results/GBM_escitalopram_q02.jpg", plot = last_plot(), width = 20, height = 12, units = "in")
+
+
+
+# Figure 2 : Gut Brain Modules --------------------------------------------
+
+# Get all the GBM that showed significant results in the interaction
+gbm_interaction_data <- GBM_BH_interaction %>%
+  t() %>% 
+  as.data.frame() %>%
+  add_column(Group = metadata$Treatment,
+             Nestbuilding = metadata$Nestbuilding, 
+             ID = metadata$plate) %>%
+  pivot_longer(!c("Group", "Nestbuilding", "ID")) %>% 
+  mutate(question = "Interaction")
+
+# Get all the GBM that showed significant results due to the treatment
+gbm_treatment_data <- GBM_BH_treatment %>%
+  t() %>% 
+  as.data.frame() %>%
+  add_column(Group = metadata$Treatment,
+             Nestbuilding = metadata$Nestbuilding, 
+             ID = metadata$plate) %>%
+  pivot_longer(!c("Group", "Nestbuilding", "ID")) %>% 
+  mutate(question = "Escitalopram\nTreatment")
+
+# Get all the GBM that showed significant results due to the basal behavior phenotype
+gbm_nestbuilding_data <- GBM_BH_nestbuilding %>%
+  t() %>% 
+  as.data.frame() %>%
+  add_column(Group = metadata$Treatment,
+             Nestbuilding = metadata$Nestbuilding, 
+             ID = metadata$plate) %>%
+  pivot_longer(!c("Group", "Nestbuilding", "ID")) %>% 
+  mutate(question = "Nestbuilding\nBehavior")
+
+
+# Bind all together
+gbm_data <- rbind(gbm_interaction_data, gbm_treatment_data, gbm_nestbuilding_data)
+
+
+# Calculate the mean of the score for each GBM within each condition
+gbm_values <- gbm_data %>% 
+  filter(str_detect(name, interesting_gbms)) %>% 
+  mutate(groups = paste0(Group,"\n", Nestbuilding)) %>% 
+  group_by(name, groups) %>% 
+  summarise(mean_value = mean(value, na.rm = T), .groups = "drop")
+
+
+# Determine if the interaction or each factor by its own drive significant differences (answer as logical value)
+gbm_significance <- gbm_data %>% 
+  mutate(groups = paste0(Group,"\n", Nestbuilding),
+         value = TRUE,
+         question = factor(x = question, levels = c("Interaction", "Nestbuilding\nBehavior", "Escitalopram\nTreatment"))) %>% 
+  select(name, question, value) %>% 
+  unique()
+
+
+
+
+# Tile plot with the values for each GBM within each condition  
+gbm_values %>% 
+  ggplot(aes(x = groups, y = name, fill = mean_value)) +
+  geom_tile(color = "black") + 
+  
+  scale_fill_gradientn(colors = c("white", "pink", "red"),
+                       breaks = seq(from = -5, to = 2.5, by = 2.5),
+                       limits = c(-6,3)) + 
+  scale_x_discrete(expand = c(0,0), position = "top") +
+  
+  labs(fill = "") +
+  
+  ggtitle("A") +
+  
+  theme_bw() +
+  theme(axis.title = element_blank(),
+        axis.text.x = element_text(size = 16),
+        axis.text.y = element_text(size = 16),
+        
+        legend.text = element_text(size = 16),
+        legend.key.height = unit(0.7, "in"),
+        legend.key.width = unit(0.4, "in"),
+        
+        panel.grid = element_blank(),
+        
+        plot.title = element_text(size = 40, face = "bold", hjust = -0.2, vjust = -0.15)) +
+  
+  
+  
+#' Tile plot with a logical answer to the question: Are the differences seen for each GBM
+#' drive by an interaction, or either of the factors included in the analysis.
+gbm_significance %>% 
+  ggplot(aes(x = question, y = name, fill = value)) +
+  geom_tile(color = "black") + 
+  theme_bw() + 
+  scale_x_discrete(expand = c(0,0), position = "top") +
+  theme(axis.text.y = element_blank(),
+        axis.text.x = element_text(size = 16),
+        axis.ticks.y = element_blank(),
+        axis.title = element_blank(),
+        
+        panel.grid = element_blank()) +
+  
+  plot_layout(guides = "collect")
+
+
+
+
+
+
+
+
+# GMM ---------------------------------------------------------------------
+
+
+# Plot the GMM that show a group effect at q < 0.2
+GMM_BH_interaction <- clr_GMMs[GMMs.glm[GMMs.glm$`TreatmentWater:NestbuildingNNB Pr(>|t|).BH` < 0.2,"feature"],]
+
+GMM_BH_interaction %>%
   t() %>% 
   as.data.frame() %>%
   add_column(Group = metadata$Treatment,
@@ -475,42 +793,37 @@ GBM_BH %>%
              color = Group_axis,
              fill = Group_axis)) +
   
-  #geom_violin(alpha = 0.5) +
   geom_boxplot(alpha = 1/2, coef = 100) +
   geom_point(shape = 21, size = 3, color = "black") +
   
-  facet_wrap(~ name, scales = "free_y", ncol = 3) +
+  facet_wrap(~ name, scales = "free_y", ncol = 5) +
   
-  scale_fill_brewer(type = "qual", palette = "Paired", name = "Groups") +
-  scale_color_brewer(type = "qual", palette = "Paired", name = "Groups") +
+  scale_fill_manual(values = filling_colors) +
+  scale_color_manual(values = filling_colors) +
   
   ylab("") + xlab("") + 
   
-  labs(color = "Groups") +
+  labs(color = "Groups",
+       fill = "Groups") +
   
   theme_bw() + 
-  
-  theme(axis.text.x = element_text(size = 12, face="bold"),
+  theme(axis.text.x = element_text(size = 12),
         axis.text.y = element_text(size = 14),
         
         strip.text = element_text(size = 14, face = "bold"), 
         
-        legend.key.size = unit(0.7, units = "in"),
+        legend.key.size = unit(0.4, units = "in"),
         legend.text = element_text(size = 12),
-        legend.title = element_text(size = 14, face = "bold"),
-        legend.direction = "horizontal",
-        legend.position = c(0.65, 0.04)) 
+        legend.title = element_text(size = 14, face = "bold")) 
 
-# Saving the plot
-#ggsave(filename = "results/GBM_interaction_q02.jpg", plot = last_plot(), width = 20, height = 12, units = "in")
+# Saving the results
+#ggsave(filename = "results/GMM_q02.jpg", plot = last_plot(), width = 12, height = 8, units = "in")
 
 
 
-
-# Plot the GBM that show a group effect at q < 0.2 (For Nestbuilding, which are the same conditions in the study 1)
-GBM_BH <- clr_GBMs[GBMs.glm[GBMs.glm$`NestbuildingNNB Pr(>|t|).BH` < 0.2,"feature"],]
-
-GBM_BH %>%
+GMM_BH_nestbuilding <- clr_GMMs[GMMs.glm[GMMs.glm$`NestbuildingNNB Pr(>|t|).BH` < 0.2, "feature"],]
+                                        
+GMM_BH_nestbuilding %>% 
   t() %>% 
   as.data.frame() %>%
   add_column(Group = metadata$Treatment,
@@ -536,12 +849,12 @@ GBM_BH %>%
   
   facet_wrap(~ name, scales = "free_y", ncol = 3) +
   
-  scale_fill_brewer(type = "qual", palette = "Paired", name = "Groups") +
-  scale_color_brewer(type = "qual", palette = "Paired", name = "Groups") +
+  scale_fill_manual(values = filling_colors[c(2,4)]) +
+  scale_color_manual(values = filling_colors[c(2,4)]) +
   
   ylab("") + xlab("") + 
   
-  labs(color = "Groups") +
+  labs(color = "Groups", fill = "Groups") +
   
   theme_bw() + 
   
@@ -556,113 +869,6 @@ GBM_BH %>%
         legend.direction = "horizontal",
         legend.position = c(0.8, 0.15))
 
-
-#ggsave(filename = "results/GBM_nestbuilding_q02.jpg", plot = last_plot(), width = 20, height = 12, units = "in")
-
-
-
-
-# Plot the GBM that show a group effect at q < 0.2 (For Nestbuilding, which are the same conditions in the study 1)
-GBM_BH <- clr_GBMs[GBMs.glm[GBMs.glm$`TreatmentWater Pr(>|t|).BH` < 0.2,"feature"],]
-
-GBM_BH %>%
-  t() %>% 
-  as.data.frame() %>%
-  add_column(Group = metadata$Treatment,
-             Nestbuilding = metadata$Nestbuilding, 
-             ID = metadata$plate) %>% 
-  pivot_longer(!c("Group", "Nestbuilding", "ID")) %>% 
-  #filter(Nestbuilding == "LNB") %>% 
-  mutate(name = str_replace(name, ".*ales_", ""),
-         Group_axis = factor(Group, levels = c("Water", "Escitalopram"))) %>% 
-  #Group_axis = paste(Nestbuilding, Group, sep = "\n"),
-  #Group_legend = paste(Nestbuilding, Group),
-  #Group_axis = factor(Group_axis, levels = c("NNB\nWater", "NNB\nEscitalopram", "LNB\nWater", "LNB\nEscitalopram")),
-  #Group_legend = factor(Group_legend, levels = c("NNB Water", "NNB Escitalopram", "LNB Water", "LNB Escitalopram"))) %>% 
-  
-  ggplot(aes(x = Group_axis,
-             y = value,
-             color = Group_axis,
-             fill = Group_axis)) +
-  
-  #geom_violin(alpha = 0.5) +
-  geom_boxplot(alpha = 1/2, coef = 100) +
-  geom_point(shape = 21, size = 3, color = "black") +
-  
-  facet_wrap(~ name, scales = "free_y", ncol = 3) +
-  
-  scale_fill_brewer(type = "qual", palette = "Paired", name = "Groups") +
-  scale_color_brewer(type = "qual", palette = "Paired", name = "Groups") +
-  
-  ylab("") + xlab("") + 
-  
-  labs(color = "Groups") +
-  
-  theme_bw() + 
-  
-  theme(axis.text.x = element_text(size = 12),
-        axis.text.y = element_text(size = 14),
-        
-        strip.text = element_text(size = 14, face = "bold"), 
-        
-        legend.key.size = unit(0.4, units = "in"),
-        legend.text = element_text(size = 12),
-        legend.title = element_text(size = 14, face = "bold"))
-
-
-#ggsave(filename = "results/GBM_escitalopram_q02.jpg", plot = last_plot(), width = 20, height = 12, units = "in")
-
-
-
-
-
-# Plot the GMM that show a group effect at q < 0.2
-GMM_BH <- clr_GMMs[GMMs.glm[GMMs.glm$`TreatmentWater:NestbuildingNNB Pr(>|t|).BH` < 0.2,"feature"],]
-
-GMM_BH %>%
-  t() %>% 
-  as.data.frame() %>%
-  add_column(Group = metadata$Treatment,
-             Nestbuilding = metadata$Nestbuilding, 
-             ID = metadata$plate) %>%
-  pivot_longer(!c("Group", "Nestbuilding", "ID")) %>% 
-  mutate(name = str_replace(name, ".*ales_", ""),
-         Group = factor(Group, levels = c("Water", "Escitalopram")),
-         Group_axis = paste(Nestbuilding, Group, sep = "\n"),
-         Group_legend = paste(Nestbuilding, Group),
-         Group_axis = factor(Group_axis, levels = c("NNB\nWater", "NNB\nEscitalopram", "LNB\nWater", "LNB\nEscitalopram")),
-         Group_legend = factor(Group_legend, levels = c("NNB Water", "NNB Escitalopram", "LNB Water", "LNB Escitalopram"))) %>% 
-  
-  ggplot(aes(x = Group_axis,
-             y = value,
-             color = Group_axis,
-             fill = Group_axis)) +
-  
-  geom_boxplot(alpha = 1/2, coef = 100) +
-  geom_point(shape = 21, size = 3, color = "black") +
-  
-  facet_wrap(~ name, scales = "free_y", ncol = 3) +
-  
-  scale_fill_brewer(type = "qual", palette = "Paired") +
-  scale_color_brewer(type = "qual", palette = "Paired") +
-  
-  ylab("") + xlab("") + 
-  
-  labs(color = "Groups",
-       fill = "Groups") +
-  
-  theme_bw() + 
-  theme(axis.text.x = element_text(size = 12),
-        axis.text.y = element_text(size = 14),
-        
-        strip.text = element_text(size = 14, face = "bold"), 
-        
-        legend.key.size = unit(0.4, units = "in"),
-        legend.text = element_text(size = 12),
-        legend.title = element_text(size = 14, face = "bold")) 
-
-# Saving the results
-#ggsave(filename = "results/GMM_q02.jpg", plot = last_plot(), width = 12, height = 8, units = "in")
 
 
 
