@@ -135,16 +135,16 @@ my_cols_phylum <- c(brewer.pal(7, "Dark2"),
                     "grey50")
 
 # Colors to identify the treatments the samples underwent 
-my_cols_treatment <- c(brewer.pal(8, "Paired")[c(1,7)])
+my_cols_treatment <- c(brewer.pal(8, "Paired")[c(7,1)])
 
 #' Names of the samples in each group: either escitalopram or water.
 #' This will be useful to reorder the samples in the plot with the bars
-samples_escitalopram <- metadata %>% 
-        filter(Treatment == "Escitalopram") %>% 
+samples_nnb <- metadata %>% 
+        filter(Nestbuilding == "NNB") %>% 
         pull(Sample_ID)
 
-samples_water <- metadata %>% 
-        filter(Treatment == "Water") %>% 
+samples_lnb <- metadata %>% 
+        filter(Nestbuilding == "LNB") %>% 
         pull(Sample_ID)
 
 
@@ -182,14 +182,14 @@ cols <- c(brewer.pal(12, "Set3")[c(2:4)],
           brewer.pal(12, "Set3")[c(7,8)],
           brewer.pal(8, "Pastel2")[7],
           brewer.pal(12, "Set3")[c(1, 10:12)],
-          "grey50")
+          "grey70")
 
 #cols[phylums == "Unknown"] = "grey50"
 
 
 plot_composition <- rel_counts %>%
         t() %>% 
-        as_data_frame() %>% 
+        as_tibble() %>% 
         # Here I added the names of the samples as column
         mutate(Sample_ID = Sample_ID) %>% 
         pivot_longer(cols = !matches("Sample_ID"),
@@ -201,16 +201,18 @@ plot_composition <- rel_counts %>%
                Phylum = str_replace_all(Phylum, "_.*", "")) %>% 
         inner_join(x = ., y = metadata, by = "Sample_ID") %>% 
         mutate(Sample_ID = factor(x = Sample_ID, 
-                                  levels = c(samples_escitalopram,
-                                             samples_water)),
+                                  levels = c(samples_nnb,
+                                             samples_lnb)),
                Phylum = factor(x = Phylum,
-                               levels = phylums)) %>% 
+                               levels = phylums),
+               Treatment = factor(x = Treatment, 
+                                  levels = c("Water", "Escitalopram"))) %>% 
         
         ggplot(aes(x = Sample_ID, y = abundance, fill = Phylum, color = Phylum)) +
         
         geom_col() +
         
-        facet_grid(.~Nestbuilding, scales = "free") +
+        facet_grid(.~Treatment, scales = "free") +
         
         scale_color_manual(values = cols,
                            breaks = sort(phylums)) +
@@ -226,12 +228,14 @@ plot_composition <- rel_counts %>%
         
         geom_tile(inherit.aes = FALSE,
                   aes(x = Sample_ID, y = -0.03, 
-                      fill = Treatment, color = Treatment), 
+                      fill = Nestbuilding, color = Nestbuilding), 
                   height = 0.05, show.legend = FALSE) +
         
         scale_color_manual(values = my_cols_treatment) +
         scale_fill_manual(values = my_cols_treatment) +
         
+        geom_vline(aes(xintercept = 11.5), linewidth = 1) +
+  
         labs(x = "",
              y = "Relative abundance") +
         
@@ -364,7 +368,10 @@ pca$Treatment  = metadata$Treatment
 pca$plate      = metadata$plate
 
 #Plot with ggplot2 
-plot_beta_div <- ggplot(data = pca, aes(x = PC1, y = PC2, fill = Legend, colour = Legend))+
+plot_beta_div <- pca %>% 
+  mutate(Legend = paste0(Phenotype, "\n", Treatment),
+         Legend = factor(x = Legend, levels = c("NNB\nWater", "NNB\nEscitalopram", "LNB\nWater", "LNB\nEscitalopram"))) %>% 
+  ggplot(aes(x = PC1, y = PC2, fill = Legend, colour = Legend))+
   stat_ellipse(show.legend = FALSE) + 
   geom_point(shape = 21, size = 6, colour = "black") + 
   xlab(paste("PC1: ", pc1,  "%", sep="")) + 
@@ -376,10 +383,10 @@ plot_beta_div <- ggplot(data = pca, aes(x = PC1, y = PC2, fill = Legend, colour 
   theme(axis.text = element_text(size = 11),
         axis.title = element_text(size = 16),
         
-        # legend.key.size = unit(0.5, units = "in"),
-        # legend.text = element_text(size = 14),
-        # legend.title = element_text(size = 16),
-        legend.position = "none",
+        legend.key.size = unit(0.6, units = "in"),
+        legend.text = element_text(size = 16),
+        legend.title = element_blank(),
+        legend.position = "bottom",
         
         plot.title = element_text(size = 40, face = "bold", hjust = -0.05))
 
@@ -405,7 +412,7 @@ library(patchwork)
 
 figure1 <- ((plot_alpha_div / plot_beta_div + plot_layout(guides = "keep")) | plot_composition) + 
   plot_layout(guides = "auto",
-              widths = unit(c(10,6), c("in", "in")))
+              widths = unit(c(9,6), c("in", "in")))
 
 
 ggsave("results/fig1.tiff", plot = figure1, device = "tiff", width = 20, height = 12, dpi = 300, units = "in")
@@ -1018,6 +1025,7 @@ metabol.exp <- metabolomics %>%
 
   
 # Formatting the metadata to be handled by fw_glm function
+# metabolomic.xslx has the metadata as well
 metadata.metabol <- metabolomics %>% 
   rename(Sample_ID = `Animal No`) %>% 
   mutate(Sample_ID = paste0("X", Sample_ID)) %>% 
@@ -1144,8 +1152,6 @@ anansiLong <- spinToLong(anansi_output = anansi_out, translate = F)
 
 anansiLong <- anansiLong[anansiLong$model_full_q.values < 0.1,]
 
-anansiLong$
-
 anansiLong %>% 
   filter(model_disjointed_p.values < 0.05) %>% 
   ggplot(aes(x      = r.values, 
@@ -1166,10 +1172,10 @@ anansiLong %>%
   #fix the scales, labels, theme and other layout
   scale_y_discrete(limits = rev, position = "right") +
   scale_alpha_manual(values = c("TRUE" = 1, "FALSE" = 1/3)) +
-  scale_fill_manual(values = c("NNB Water" = "#A6CEE3", 
-                               "NNB Escitalopram"  = "#1F78B4", 
-                               "LNB Water"  = "#B2DF8A", 
-                               "LNB Escitalopram" = "#33A02C",
+  scale_fill_manual(values = c("NNB Water" = filling_colors[1], 
+                               "NNB Escitalopram"  = filling_colors[2],
+                               "LNB Water"  = filling_colors[3], 
+                               "LNB Escitalopram" = filling_colors[4],
                                "All"        = "gray"))+
   theme_bw() + 
   ylab("") + 
