@@ -672,47 +672,39 @@ GBM_BH_treatment %>%
 gbm_interaction_data <- GBM_BH_interaction %>%
   t() %>% 
   as.data.frame() %>%
-  add_column(Group = metadata$Treatment,
-             Nestbuilding = metadata$Nestbuilding, 
-             ID = metadata$plate) %>%
-  pivot_longer(!c("Group", "Nestbuilding", "ID")) %>% 
+  rownames_to_column("Samples") %>% 
+  pivot_longer(!matches("Samples")) %>% 
   mutate(question = "Interaction")
 
 # Get all the GBM that showed significant results due to the treatment
 gbm_treatment_data <- GBM_BH_treatment %>%
   t() %>% 
   as.data.frame() %>%
-  add_column(Group = metadata$Treatment,
-             Nestbuilding = metadata$Nestbuilding, 
-             ID = metadata$plate) %>%
-  pivot_longer(!c("Group", "Nestbuilding", "ID")) %>% 
+  rownames_to_column("Samples") %>% 
+  pivot_longer(!matches("Samples")) %>% 
   mutate(question = "Escitalopram\nTreatment")
 
 # Get all the GBM that showed significant results due to the basal behavior phenotype
 gbm_nestbuilding_data <- GBM_BH_nestbuilding %>%
   t() %>% 
   as.data.frame() %>%
-  add_column(Group = metadata$Treatment,
-             Nestbuilding = metadata$Nestbuilding, 
-             ID = metadata$plate) %>%
-  pivot_longer(!c("Group", "Nestbuilding", "ID")) %>% 
+  rownames_to_column("Samples") %>% 
+  pivot_longer(!matches("Samples")) %>% 
   mutate(question = "Nestbuilding\nBehavior")
 
 
 
-gbm_data <- rbind(gbm_interaction_data, gbm_nestbuilding_data, gbm_treatment_data) %>% 
-  group_by(name, question) %>% 
-  mutate(value = scale(value)) %>% 
-  ungroup()
+gbm_data <- rbind(gbm_interaction_data, gbm_nestbuilding_data, gbm_treatment_data)
 
 
 
 
 # Calculate the mean of the score for each GBM within each condition
-gbm_values <- gbm_data %>% 
+#gbm_values <- 
+gbm_data %>% 
   filter(str_detect(name, interesting_gbms)) %>% 
   mutate(groups = paste0(Group,"\n", Nestbuilding),
-         groups = factor(groups, levels = c("Water\nNNB","Water\nLNB", "Escitalopram\nNNB", "Escitalopram\nLNB"))) %>% 
+         groups = factor(groups, levels = c("Water\nNNB","Water\nLNB", "Escitalopram\nNNB", "Escitalopram\nLNB")))
   group_by(name, groups) %>% 
   summarise(mean_value = mean(value, na.rm = T), .groups = "drop")
 
