@@ -792,7 +792,7 @@ gbm_significance <- GBMs.glm %>%
 plot_GBM_panelA_fig2 <- (gbm_values %>% 
   ggplot(aes(x = group, y = name_fct, fill = mean_value_z)) +
   geom_tile(color = "black") + 
-  scale_fill_gradientn(colors = c("#FDFEFE", "#16A085", "#0E6655"),
+  scale_fill_gradientn(colors = c("#FDFEFE", "#45B39D", "#0E6655"),
                        breaks = seq(from = -2, to = 2, by = 1),
                        limits = c(-2,2)) +
   scale_x_discrete(expand = c(0,0), position = "top") +
