@@ -415,7 +415,7 @@ figure1 <- ((plot_alpha_div / plot_beta_div + plot_layout(guides = "keep")) | pl
               widths = unit(c(8,8), c("in", "in")))
 
 
-ggsave("results/fig1.tiff", plot = figure1, device = "tiff", width = 20, height = 12, dpi = 300, units = "in")
+ggsave("results/figure1.tiff", plot = figure1, device = "tiff", width = 20, height = 12, dpi = 300, units = "in")
 
 
 
@@ -673,24 +673,24 @@ GBM_BH_treatment %>%
 gbm_interaction_data <- GBM_BH_interaction %>%
   t() %>% 
   as.data.frame() %>%
-  rownames_to_column("Samples") %>% 
-  pivot_longer(!matches("Samples")) %>% 
+  rownames_to_column("Sample_ID") %>% 
+  pivot_longer(!matches("Sample_ID")) %>% 
   mutate(question = "Interaction")
 
 # Get all the GBM that showed significant results due to the treatment
 gbm_treatment_data <- GBM_BH_treatment %>%
   t() %>% 
   as.data.frame() %>%
-  rownames_to_column("Samples") %>% 
-  pivot_longer(!matches("Samples")) %>% 
+  rownames_to_column("Sample_ID") %>% 
+  pivot_longer(!matches("Sample_ID")) %>% 
   mutate(question = "Escitalopram\nTreatment")
 
 # Get all the GBM that showed significant results due to the basal behavior phenotype
 gbm_nestbuilding_data <- GBM_BH_nestbuilding %>%
   t() %>% 
   as.data.frame() %>%
-  rownames_to_column("Samples") %>% 
-  pivot_longer(!matches("Samples")) %>% 
+  rownames_to_column("Sample_ID") %>% 
+  pivot_longer(!matches("Sample_ID")) %>% 
   mutate(question = "Nestbuilding\nBehavior")
 
 
@@ -698,29 +698,53 @@ gbm_nestbuilding_data <- GBM_BH_nestbuilding %>%
 gbm_data <- rbind(gbm_interaction_data, gbm_nestbuilding_data, gbm_treatment_data)
 
 
-
-
-# Calculate the mean of the score for each GBM within each condition
-#gbm_values <- 
-gbm_data %>% 
+gbm_values <- gbm_data %>% 
   filter(str_detect(name, interesting_gbms)) %>% 
-  mutate(groups = paste0(Group,"\n", Nestbuilding),
-         groups = factor(groups, levels = c("Water\nNNB","Water\nLNB", "Escitalopram\nNNB", "Escitalopram\nLNB")))
-  group_by(name, groups) %>% 
-  summarise(mean_value = mean(value, na.rm = T), .groups = "drop")
+  inner_join(., metadata, by = "Sample_ID") %>% 
+  mutate(group = paste0(Nestbuilding,"\n",Treatment)) %>% 
+  group_by(name, group) %>% 
+  mutate(mean_value = mean(value, na.rm = TRUE)) %>% 
+  ungroup() %>% 
+  group_by(name) %>% 
+  mutate(mean_value_z = scale(mean_value, center = TRUE, scale = TRUE),
+         name_fct = str_replace(name, " \\(", "\n\\("),
+         name_fct = factor(name_fct, levels = c(
+                                                 # Permeability
+                                                 "Nitric oxide degradation II\n(NO reductase)",
+                                                 "Nitric oxide synthesis II\n(nitrite reductase)",
+                                                 "Nitric oxide synthesis I\n(NO synthase)",
+                                                 # SCFA
+                                                 "Isovaleric acid synthesis II\n(KADC pathway)",
+                                                 "Propionate synthesis II",
+                                                 "Butyrate synthesis I",
+                                                 "Butyrate synthesis II",
+                                                 "Acetate synthesis I",
+                                                 # Tryptophan metabolism
+                                                 "Quinolinic acid degradation",
+                                                 "Tryptophan degradation")),
+         group = factor(group, levels = c("NNB\nWater", "NNB\nEscitalopram", "LNB\nWater", "LNB\nEscitalopram")))
+# # Calculate the mean of the score for each GBM within each condition
+# gbm_values <- gbm_data %>% 
+#   filter(str_detect(name, interesting_gbms)) %>% 
+#   mutate(groups = paste0(Group,"\n", Nestbuilding),
+#          groups = factor(groups, levels = c("Water\nNNB","Water\nLNB", "Escitalopram\nNNB", "Escitalopram\nLNB")))
+#   group_by(name, groups) %>% 
+#   summarise(mean_value = mean(value, na.rm = T), .groups = "drop")
 
 
 # Determine if the interaction or each factor by its own drive significant differences (answer as logical value)
-gbm_significance_caterogical <- gbm_data %>% 
-  mutate(groups = paste0(Group,"\n", Nestbuilding),
+gbm_significance_caterogical <-   gbm_data %>% 
+  inner_join(., metadata, by = "Sample_ID") %>% 
+  mutate(groups = paste0(Nestbuilding,"\n", Treatment),
          value = TRUE,
-         question = factor(x = question, levels = c("Interaction", "Nestbuilding\nBehavior", "Escitalopram\nTreatment"))) %>% 
-  select(name, question, value) %>% 
+         question = factor(x = question, levels = c("Interaction", "Nestbuilding\nBehavior", "Escitalopram\nTreatment")),
+         groups = factor(groups, levels = c("NNB\nWater", "LNB\nWater", "NNB\nEscitalopram", "LNB\nEscitalopram"))) %>% 
+  select(name, groups, question, value) %>% 
   unique()
 
-GBMs.glm[, c("feature", "TreatmentWater:NestbuildingNNB Estimate", "TreatmentWater Estimate", "NestbuildingNNB Estimate")]
 
-significant_gbm_of_interest <- gbm_values %>% pull(name) %>% unique()
+
+significant_gbm_of_interest <- gbm_values %>% pull(name) %>% unique() %>% as.character()
 
 gbm_significance <- GBMs.glm %>% 
   as_tibble() %>% 
@@ -739,7 +763,23 @@ gbm_significance <- GBMs.glm %>%
   rename("name" = feature) %>% 
   right_join(gbm_significance_caterogical, ., by = c("name", "question")) %>% 
   mutate(value = replace_na(value, FALSE),
-         label = ifelse(value, "🞸", ""))
+         label = ifelse(value, "🞸", ""),
+         name_fct = str_replace(name, " \\(", "\n\\("),
+         name_fct = factor(name_fct, levels = c(
+                                                 # Permeability
+                                                 "Nitric oxide degradation II\n(NO reductase)",
+                                                 "Nitric oxide synthesis II\n(nitrite reductase)",
+                                                 "Nitric oxide synthesis I\n(NO synthase)",
+                                                 # SCFA
+                                                 "Isovaleric acid synthesis II\n(KADC pathway)",
+                                                 "Propionate synthesis II",
+                                                 "Butyrate synthesis I",
+                                                 "Butyrate synthesis II",
+                                                 "Acetate synthesis I",
+                                                 # Tryptophan metabolism
+                                                 "Quinolinic acid degradation",
+                                                 "Tryptophan degradation")),
+         group = factor(groups, levels = c("NNB\nWater", "NNB\nEscitalopram", "LNB\nWater", "LNB\nEscitalopram")))
   
 
 
@@ -749,18 +789,16 @@ gbm_significance <- GBMs.glm %>%
 
 
 # Tile plot with the values for each GBM within each condition  
-gbm_values %>% 
-  ggplot(aes(x = groups, y = name, fill = mean_value)) +
+plot_GBM_panelA_fig2 <- (gbm_values %>% 
+  ggplot(aes(x = group, y = name_fct, fill = mean_value_z)) +
   geom_tile(color = "black") + 
-  scale_fill_gradientn(colors = c("#FDFEFE", "#7DCEA0", "#229954"),
-                       breaks = seq(from = -1.5, to = 1.5, by = 0.75),
-                       limits = c(-1.5,1.5)) +
+  scale_fill_gradientn(colors = c("#FDFEFE", "#16A085", "#0E6655"),
+                       breaks = seq(from = -2, to = 2, by = 1),
+                       limits = c(-2,2)) +
   scale_x_discrete(expand = c(0,0), position = "top") +
   scale_y_discrete(expand = c(0,0)) +
   
-  labs(fill = "") +
-  
-  ggtitle("A") +
+  labs(fill = "Z-score") +
   
   theme_bw() +
   theme(axis.title = element_blank(),
@@ -771,6 +809,7 @@ gbm_values %>%
         legend.text = element_text(size = 16),
         legend.key.height = unit(0.6, "in"),
         legend.key.width = unit(0.3, "in"),
+        legend.title = element_text(size = 20),
         
         panel.grid = element_blank(),
         
@@ -781,8 +820,8 @@ gbm_values %>%
 #' Tile plot with a logical answer to the question: Are the differences seen for each GBM
 #' drive by an interaction, or either of the factors included in the analysis.
 gbm_significance %>% 
-  ggplot(aes(x = question, y = name, fill = estimate)) +
-  geom_tile(color = "black") + 
+  ggplot(aes(x = question, y = name_fct, fill = estimate)) +
+  geom_tile(color = "black") +
   geom_text(aes(label = label), size = 8) +
   
   scale_fill_gradientn(colors = c("#2980B9",  "#A9CCE3", "#FDFEFE", "#F9E79F", "#F1C40F"),
@@ -791,6 +830,8 @@ gbm_significance %>%
                        limits = c(-1.8,1.8)) +
   scale_x_discrete(expand = c(0,0), position = "top") +
   scale_y_discrete(expand = c(0,0)) +
+  
+  labs(fill = "Estimate") +
   
   theme_bw() +
   theme(axis.text.y = element_blank(),
@@ -802,12 +843,204 @@ gbm_significance %>%
         
         legend.text = element_text(size = 16),
         legend.key.height = unit(0.6, "in"),
-        legend.key.width = unit(0.3, "in")) +
+        legend.key.width = unit(0.3, "in"),
+        legend.title = element_text(size = 20)) +
   
   plot_layout(guides = "collect",
-              widths = c(3.5,1.8))
+              widths = c(3.5,1.8)))
 
-#
+
+ggsave(filename = "results/figure2.tiff", device = "tiff", plot = plot_GBM_panelA_fig2,
+       width = 17, height = 10, units = "in")
+
+
+
+# Figure 2 : GMM ----------------------------------------------------------
+
+
+GMM_BH_interaction <- clr_GMMs[GMMs.glm[GMMs.glm$`TreatmentWater:NestbuildingNNB Pr(>|t|).BH` < 0.2,"feature"],]
+GMM_BH_nestbuilding <- clr_GMMs[GMMs.glm[GMMs.glm$`NestbuildingNNB Pr(>|t|).BH` < 0.2, "feature"],]
+GMM_BH_treatment <- clr_GMMs[GMMs.glm[GMMs.glm$`TreatmentWater Pr(>|t|)` < 0.2, "feature"],]
+
+
+# Get all the GBM that showed significant results in the interaction
+gmm_interaction_data <- GMM_BH_interaction %>%
+  t() %>% 
+  as.data.frame() %>%
+  rownames_to_column("Sample_ID") %>% 
+  pivot_longer(!matches("Sample_ID")) %>% 
+  mutate(question = "Interaction")
+
+# Get all the GBM that showed significant results due to the treatment
+gmm_treatment_data <- GMM_BH_treatment %>%
+  t() %>% 
+  as.data.frame() %>%
+  rownames_to_column("Sample_ID") %>% 
+  pivot_longer(!matches("Sample_ID")) %>% 
+  mutate(question = "Escitalopram\nTreatment")
+
+# Get all the GBM that showed significant results due to the basal behavior phenotype
+gmm_nestbuilding_data <- GMM_BH_nestbuilding %>%
+  t() %>% 
+  as.data.frame() %>%
+  rownames_to_column("Sample_ID") %>% 
+  pivot_longer(!matches("Sample_ID")) %>% 
+  mutate(question = "Nestbuilding\nBehavior")
+
+
+
+gmm_data <- rbind(gmm_interaction_data, gmm_nestbuilding_data, gmm_treatment_data)
+
+
+#gmm_values <- 
+unique(gmm_data$name)
+  filter(str_detect(name, interesting_gbms)) %>% 
+  inner_join(., metadata, by = "Sample_ID") %>% 
+  mutate(group = paste0(Nestbuilding,"\n",Treatment)) %>% 
+  group_by(name, group) %>% 
+  mutate(mean_value = mean(value, na.rm = TRUE)) %>% 
+  ungroup() %>% 
+  group_by(name) %>% 
+  mutate(mean_value_z = scale(mean_value, center = TRUE, scale = TRUE),
+         name_fct = str_replace(name, " \\(", "\n\\("),
+         name_fct = factor(name_fct, levels = c(
+           # Permeability
+           "Nitric oxide degradation II\n(NO reductase)",
+           "Nitric oxide synthesis II\n(nitrite reductase)",
+           "Nitric oxide synthesis I\n(NO synthase)",
+           # SCFA
+           "Isovaleric acid synthesis II\n(KADC pathway)",
+           "Propionate synthesis II",
+           "Butyrate synthesis I",
+           "Butyrate synthesis II",
+           "Acetate synthesis I",
+           # Tryptophan metabolism
+           "Quinolinic acid degradation",
+           "Tryptophan degradation")))
+# # Calculate the mean of the score for each GBM within each condition
+# gbm_values <- gbm_data %>% 
+#   filter(str_detect(name, interesting_gbms)) %>% 
+#   mutate(groups = paste0(Group,"\n", Nestbuilding),
+#          groups = factor(groups, levels = c("Water\nNNB","Water\nLNB", "Escitalopram\nNNB", "Escitalopram\nLNB")))
+#   group_by(name, groups) %>% 
+#   summarise(mean_value = mean(value, na.rm = T), .groups = "drop")
+
+
+# Determine if the interaction or each factor by its own drive significant differences (answer as logical value)
+gbm_significance_caterogical <-   gbm_data %>% 
+  inner_join(., metadata, by = "Sample_ID") %>% 
+  mutate(groups = paste0(Nestbuilding,"\n", Treatment),
+         value = TRUE,
+         question = factor(x = question, levels = c("Interaction", "Nestbuilding\nBehavior", "Escitalopram\nTreatment")),
+         groups = factor(groups, levels = c("NNB\nWater", "LNB\nWater", "NNB\nEscitalopram", "LNB\nEscitalopram"))) %>% 
+  select(name, groups, question, value) %>% 
+  unique()
+
+
+
+significant_gbm_of_interest <- gbm_values %>% pull(name) %>% unique() %>% as.character()
+
+gbm_significance <- GBMs.glm %>% 
+  as_tibble() %>% 
+  select(feature,
+         `TreatmentWater:NestbuildingNNB Estimate`,
+         `TreatmentWater Estimate`,
+         `NestbuildingNNB Estimate`) %>% 
+  filter(feature %in% significant_gbm_of_interest) %>% 
+  pivot_longer(cols = !matches("feature"),
+               names_to = "question",
+               values_to = "estimate") %>% 
+  mutate(question = case_when(str_detect(question, ".Water:Nestbuilding.") ~ "Interaction",
+                              str_detect(question, "NestbuildingNNB.") ~ "Nestbuilding\nBehavior",
+                              TRUE ~ "Escitalopram\nTreatment"),
+         question = as.factor(question)) %>% 
+  rename("name" = feature) %>% 
+  right_join(gbm_significance_caterogical, ., by = c("name", "question")) %>% 
+  mutate(value = replace_na(value, FALSE),
+         label = ifelse(value, "🞸", ""),
+         name_fct = str_replace(name, " \\(", "\n\\("),
+         name_fct = factor(name_fct, levels = c(
+           # Permeability
+           "Nitric oxide degradation II\n(NO reductase)",
+           "Nitric oxide synthesis II\n(nitrite reductase)",
+           "Nitric oxide synthesis I\n(NO synthase)",
+           # SCFA
+           "Isovaleric acid synthesis II\n(KADC pathway)",
+           "Propionate synthesis II",
+           "Butyrate synthesis I",
+           "Butyrate synthesis II",
+           "Acetate synthesis I",
+           # Tryptophan metabolism
+           "Quinolinic acid degradation",
+           "Tryptophan degradation")))
+
+
+
+
+
+
+
+
+# Tile plot with the values for each GBM within each condition  
+plot_GBM_panelA_fig2 <- (gbm_values %>% 
+                           ggplot(aes(x = group, y = name_fct, fill = mean_value_z)) +
+                           geom_tile(color = "black") + 
+                           scale_fill_gradientn(colors = c("#FDFEFE", "#16A085", "#0E6655"),
+                                                breaks = seq(from = -2, to = 2, by = 1),
+                                                limits = c(-2,2)) +
+                           scale_x_discrete(expand = c(0,0), position = "top") +
+                           scale_y_discrete(expand = c(0,0)) +
+                           
+                           labs(fill = "") +
+                           
+                           #ggtitle("A") +
+                           
+                           theme_bw() +
+                           theme(axis.title = element_blank(),
+                                 axis.text.x = element_text(size = 16),
+                                 axis.text.y = element_text(size = 16),
+                                 axis.ticks = element_blank(),
+                                 
+                                 legend.text = element_text(size = 16),
+                                 legend.key.height = unit(0.6, "in"),
+                                 legend.key.width = unit(0.3, "in"),
+                                 
+                                 panel.grid = element_blank(),
+                                 
+                                 plot.title = element_text(size = 40, face = "bold", hjust = -0.2, vjust = -0.15)) +
+                           
+                           
+                           
+                           #' Tile plot with a logical answer to the question: Are the differences seen for each GBM
+                           #' drive by an interaction, or either of the factors included in the analysis.
+                           gbm_significance %>% 
+                           ggplot(aes(x = question, y = name_fct, fill = estimate)) +
+                           geom_tile(color = "black") +
+                           geom_text(aes(label = label), size = 8) +
+                           
+                           scale_fill_gradientn(colors = c("#2980B9",  "#A9CCE3", "#FDFEFE", "#F9E79F", "#F1C40F"),
+                                                labels = seq(-1.5, 1.5, 0.75),
+                                                breaks = seq(-1.5, 1.5, 0.75),
+                                                limits = c(-1.8,1.8)) +
+                           scale_x_discrete(expand = c(0,0), position = "top") +
+                           scale_y_discrete(expand = c(0,0)) +
+                           
+                           theme_bw() +
+                           theme(axis.text.y = element_blank(),
+                                 axis.text.x = element_text(size = 16),
+                                 axis.ticks = element_blank(),
+                                 axis.title = element_blank(),
+                                 
+                                 panel.grid = element_blank(),
+                                 
+                                 legend.text = element_text(size = 16),
+                                 legend.key.height = unit(0.6, "in"),
+                                 legend.key.width = unit(0.3, "in")) +
+                           
+                           plot_layout(guides = "collect",
+                                       widths = c(3.5,1.8)))
+
+
 
 
 
