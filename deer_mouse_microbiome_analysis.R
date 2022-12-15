@@ -8,11 +8,12 @@
 
 #Housekeeping
 options(stringsAsFactors = F)
-filling_colors <- brewer.pal(8, "Paired")[c(1:2,7:8)]
 
 #Load libraries
 library(tidyverse)
 library(Tjazi)
+library(RColorBrewer)
+filling_colors <- brewer.pal(8, "Paired")[c(1:2,7:8)]
 
 #Define working directory
 setwd(paste0(getwd(), "/deer_mouse"))
@@ -1312,16 +1313,17 @@ plot_anansi_nestbuilding <- anansiLong %>%
 
 #ggsave(filename = "results/all_correlations_rho-values.jpg", height = 12, width = 6, units = "in")
 
+library(patchwork)
 
 figure3<- (plot_anansi_nestbuilding | plot_anansi_interaction) + 
   plot_layout(guides = "collect", 
               widths = unit(c(3,3), c("in", "in")),
-              heights = unit(c(3,3), c("in", "in"))) + 
+              heights = unit(c(5,5), c("in", "in"))) + 
   plot_annotation(tag_levels = "A") & 
   theme(plot.tag = element_text(size = 40, face = "bold"),
         legend.position = "bottom")
 
-ggsave(plot = figure3, filename = "results/figure3.tiff", device = "tiff", width = 16, height = 7, units = "in")
+ggsave(plot = figure3, filename = "results/figure3.tiff", device = "tiff", width = 16, height = 8, units = "in")
 #
 
 
