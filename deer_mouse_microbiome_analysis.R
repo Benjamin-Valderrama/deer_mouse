@@ -836,7 +836,7 @@ plot_GBM_panelA_fig2 <- gbm_values %>%
         
         legend.text = element_text(size = 16),
         legend.key.height = unit(0.3, "in"),
-        legend.key.width = unit(2.2, "in"),
+        legend.key.width = unit(1.8, "in"),
         legend.title = element_text(size = 20),
         legend.position = "top",
         
@@ -874,7 +874,7 @@ gbm_significance %>%
         
         legend.text = element_text(size = 16),
         legend.key.height = unit(0.3, "in"),
-        legend.key.width = unit(0.8, "in"),
+        legend.key.width = unit(0.7, "in"),
         legend.title = element_text(size = 20),
         legend.position = "top") +
   
