@@ -412,10 +412,10 @@ library(patchwork)
 
 figure1 <- ((plot_alpha_div / plot_beta_div + plot_layout(guides = "keep")) | plot_composition) + 
   plot_layout(guides = "auto",
-              widths = unit(c(8,8), c("in", "in")))
+              widths = unit(c(8,8), c("in", "in"))) ; figure1
 
 
-ggsave("results/figure1.tiff", plot = figure1, device = "tiff", width = 20, height = 12, dpi = 300, units = "in")
+#ggsave("results/figure1.tiff", plot = figure1, device = "tiff", width = 20, height = 12, dpi = 300, units = "in")
 
 
 
@@ -475,14 +475,30 @@ clr_GMMs <- clr_GMMs[, metadata$Sample_ID]
 
 
 
-# GBM glms
+# GBM glms: Change Treatment and Nestbuilding as factors with desired level order for the GLM interpretation
+
+# GLM using factors as explanatory variables
+metadata <- metadata %>%
+  as_tibble() %>%
+  mutate(Nestbuilding = factor(Nestbuilding, levels = c("NNB", "LNB")),
+         Treatment = factor(Treatment, levels = c("Water", "Escitalopram")))
+
+# GLM using characters as explanatory variables
+# metadata <- metadata %>% 
+#   as_tibble() %>% 
+#   mutate(Nestbuilding = ifelse(Nestbuilding == "NNB", paste0("a_",Nestbuilding), Nestbuilding),
+#          Treatment = ifelse(Treatment == "Water", paste0("a_",Treatment), Treatment))
+
+
+
+
 GBMs.glm <- fw_glm(x = clr_GBMs,
                   f = ~ Treatment * Nestbuilding + plate,
                   metadata = metadata,
                   adjust.method = "BH")
 
-hist(GBMs.glm$`TreatmentWater:NestbuildingNNB Pr(>|t|)`, xlim = c(0, 1), breaks = 20)
-hist(GBMs.glm$`TreatmentWater:NestbuildingNNB Pr(>|t|).BH`, xlim = c(0, 1), breaks = 20)
+hist(GBMs.glm$`TreatmentEscitalopram:NestbuildingLNB Pr(>|t|)`, xlim = c(0, 1), breaks = 20)
+hist(GBMs.glm$`TreatmentEscitalopram:NestbuildingLNB Pr(>|t|).BH`, xlim = c(0, 1), breaks = 20)
 
 
 
@@ -493,12 +509,14 @@ GMMs.glm <- fw_glm(x = clr_GMMs,
                    metadata = metadata,
                    adjust.method = "BH")
 
-hist(GMMs.glm$`TreatmentWater:NestbuildingNNB Pr(>|t|)`, xlim = c(0, 1), breaks = 20)
-hist(GMMs.glm$`TreatmentWater:NestbuildingNNB Pr(>|t|).BH`, xlim = c(0, 1), breaks = 20)
+hist(GMMs.glm$`TreatmentEscitalopram:NestbuildingLNB Pr(>|t|)`, xlim = c(0, 1), breaks = 20)
+hist(GMMs.glm$`TreatmentEscitalopram:NestbuildingLNB Pr(>|t|).BH`, xlim = c(0, 1), breaks = 20)
 
 
 # Plot the GBM that show a group effect at q < 0.2 (For interaction between treatment and nestbuilding)
-GBM_BH_interaction <- clr_GBMs[GBMs.glm[GBMs.glm$`TreatmentWater:NestbuildingNNB Pr(>|t|).BH` < 0.2,"feature"],]
+hist(GBMs.glm$`TreatmentEscitalopram:NestbuildingLNB Pr(>|t|).BH`, xlim = c(0, 1), breaks = 20)
+
+GBM_BH_interaction <- clr_GBMs[GBMs.glm[GBMs.glm$`TreatmentEscitalopram:NestbuildingLNB Pr(>|t|).BH` < 0.2,"feature"],]
 
 interesting_gbms <- "Acetate|Butyrate|Propionate|KADC|Nitric|Tryptophan|Quinolinic"
 
@@ -557,12 +575,14 @@ GBM_BH_interaction %>%
 
 
 # Plot the GBM that show a group effect at q < 0.2 (For Nestbuilding, which are the same conditions in the study 1)
-GBM_BH_nestbuilding <- clr_GBMs[GBMs.glm[GBMs.glm$`NestbuildingNNB Pr(>|t|).BH` < 0.2,"feature"],]
+hist(GBMs.glm$`NestbuildingLNB Pr(>|t|).BH`, xlim = c(0, 1), breaks = 20)
+
+GBM_BH_nestbuilding <- clr_GBMs[GBMs.glm[GBMs.glm$`NestbuildingLNB Pr(>|t|).BH` < 0.2,"feature"],]
 
 
 GBM_BH_nestbuilding %>%
   t() %>% 
-  as.data.frame() %>%
+  as.data.frame() %>% 
   add_column(Group = metadata$Treatment,
              Nestbuilding = metadata$Nestbuilding, 
              ID = metadata$plate) %>% 
@@ -616,7 +636,9 @@ GBM_BH_nestbuilding %>%
 
 
 # Plot the GBM that show a group effect at q < 0.2 (For Nestbuilding, which are the same conditions in the study 1)
-GBM_BH_treatment <- clr_GBMs[GBMs.glm[GBMs.glm$`TreatmentWater Pr(>|t|).BH` < 0.2,"feature"],]
+hist(GBMs.glm$`TreatmentEscitalopram Pr(>|t|).BH`, xlim = c(0, 1), breaks = 20)
+
+GBM_BH_treatment <- clr_GBMs[GBMs.glm[GBMs.glm$`TreatmentEscitalopram Pr(>|t|).BH` < 0.2,"feature"],]
 
 GBM_BH_treatment %>%
   t() %>% 
@@ -695,7 +717,9 @@ gbm_nestbuilding_data <- GBM_BH_nestbuilding %>%
 
 
 
-gbm_data <- rbind(gbm_interaction_data, gbm_nestbuilding_data, gbm_treatment_data)
+gbm_data <- rbind(gbm_interaction_data, 
+                  #gbm_nestbuilding_data, 
+                  gbm_treatment_data)
 
 
 gbm_values <- gbm_data %>% 
@@ -722,7 +746,8 @@ gbm_values <- gbm_data %>%
                                                  # Tryptophan metabolism
                                                  "Quinolinic acid degradation",
                                                  "Tryptophan degradation")),
-         group = factor(group, levels = c("NNB\nWater", "NNB\nEscitalopram", "LNB\nWater", "LNB\nEscitalopram")))
+         group = factor(group, levels = c("NNB\nWater", "NNB\nEscitalopram", "LNB\nWater", "LNB\nEscitalopram"))) %>% 
+  ungroup()
 # # Calculate the mean of the score for each GBM within each condition
 # gbm_values <- gbm_data %>% 
 #   filter(str_detect(name, interesting_gbms)) %>% 
@@ -733,13 +758,15 @@ gbm_values <- gbm_data %>%
 
 
 # Determine if the interaction or each factor by its own drive significant differences (answer as logical value)
-gbm_significance_caterogical <-   gbm_data %>% 
+gbm_significance_caterogical <- gbm_data %>% 
   inner_join(., metadata, by = "Sample_ID") %>% 
-  mutate(groups = paste0(Nestbuilding,"\n", Treatment),
+  mutate(group = paste0(Nestbuilding,"\n", Treatment),
          value = TRUE,
-         question = factor(x = question, levels = c("Interaction", "Nestbuilding\nBehavior", "Escitalopram\nTreatment")),
-         groups = factor(groups, levels = c("NNB\nWater", "LNB\nWater", "NNB\nEscitalopram", "LNB\nEscitalopram"))) %>% 
-  select(name, groups, question, value) %>% 
+         question = factor(x = question, levels = c("Interaction",
+                                                    #"Nestbuilding\nBehavior",
+                                                    "Escitalopram\nTreatment")),
+         group = factor(group, levels = c("NNB\nWater", "NNB\nEscitalopram", "LNB\nWater", "LNB\nEscitalopram"))) %>% 
+  select(name, group, question, value) %>% 
   unique()
 
 
@@ -749,17 +776,17 @@ significant_gbm_of_interest <- gbm_values %>% pull(name) %>% unique() %>% as.cha
 gbm_significance <- GBMs.glm %>% 
   as_tibble() %>% 
   select(feature,
-         `TreatmentWater:NestbuildingNNB Estimate`,
-         `TreatmentWater Estimate`,
-         `NestbuildingNNB Estimate`) %>% 
+         `TreatmentEscitalopram:NestbuildingLNB Estimate`,
+         `TreatmentEscitalopram Estimate`,
+         `NestbuildingLNB Estimate`) %>% 
   filter(feature %in% significant_gbm_of_interest) %>% 
   pivot_longer(cols = !matches("feature"),
                names_to = "question",
                values_to = "estimate") %>% 
-  mutate(question = case_when(str_detect(question, ".Water:Nestbuilding.") ~ "Interaction",
-                              str_detect(question, "NestbuildingNNB.") ~ "Nestbuilding\nBehavior",
+  mutate(question = case_when(str_detect(question, ".Escitalopram:Nestbuilding.") ~ "Interaction",
+                              str_detect(question, "NestbuildingLNB.") ~ "Nestbuilding\nBehavior",
                               TRUE ~ "Escitalopram\nTreatment"),
-         question = as.factor(question)) %>% 
+         question = factor(question, levels = c("Interaction", "Nestbuilding\nBehavior", "Escitalopram\nTreatment"))) %>% 
   rename("name" = feature) %>% 
   right_join(gbm_significance_caterogical, ., by = c("name", "question")) %>% 
   mutate(value = replace_na(value, FALSE),
@@ -778,8 +805,7 @@ gbm_significance <- GBMs.glm %>%
                                                  "Acetate synthesis I",
                                                  # Tryptophan metabolism
                                                  "Quinolinic acid degradation",
-                                                 "Tryptophan degradation")),
-         group = factor(groups, levels = c("NNB\nWater", "NNB\nEscitalopram", "LNB\nWater", "LNB\nEscitalopram")))
+                                                 "Tryptophan degradation")))
   
 
 
@@ -789,7 +815,7 @@ gbm_significance <- GBMs.glm %>%
 
 
 # Tile plot with the values for each GBM within each condition  
-plot_GBM_panelA_fig2 <- (gbm_values %>% 
+plot_GBM_panelA_fig2 <- gbm_values %>% 
   ggplot(aes(x = group, y = name_fct, fill = mean_value_z)) +
   geom_tile(color = "black") + 
   scale_fill_gradientn(colors = c("#FDFEFE", "#45B39D", "#0E6655"),
@@ -798,7 +824,9 @@ plot_GBM_panelA_fig2 <- (gbm_values %>%
   scale_x_discrete(expand = c(0,0), position = "top") +
   scale_y_discrete(expand = c(0,0)) +
   
-  labs(fill = "Z-score") +
+  labs(fill = "GBM abundance [Z-score]") +
+  
+  guides(fill = guide_colorbar(title.position = "top", title.hjust = 0.5)) +
   
   theme_bw() +
   theme(axis.title = element_blank(),
@@ -807,9 +835,10 @@ plot_GBM_panelA_fig2 <- (gbm_values %>%
         axis.ticks = element_blank(),
         
         legend.text = element_text(size = 16),
-        legend.key.height = unit(0.6, "in"),
-        legend.key.width = unit(0.3, "in"),
+        legend.key.height = unit(0.3, "in"),
+        legend.key.width = unit(2.2, "in"),
         legend.title = element_text(size = 20),
+        legend.position = "top",
         
         panel.grid = element_blank(),
         
@@ -831,8 +860,10 @@ gbm_significance %>%
   scale_x_discrete(expand = c(0,0), position = "top") +
   scale_y_discrete(expand = c(0,0)) +
   
-  labs(fill = "Estimate") +
+  labs(fill = "GLM estimate [β]") +
   
+  guides(fill = guide_colorbar(title.position = "top", title.hjust = 0.5)) +
+   
   theme_bw() +
   theme(axis.text.y = element_blank(),
         axis.text.x = element_text(size = 16),
@@ -842,12 +873,12 @@ gbm_significance %>%
         panel.grid = element_blank(),
         
         legend.text = element_text(size = 16),
-        legend.key.height = unit(0.6, "in"),
-        legend.key.width = unit(0.3, "in"),
-        legend.title = element_text(size = 20)) +
+        legend.key.height = unit(0.3, "in"),
+        legend.key.width = unit(0.8, "in"),
+        legend.title = element_text(size = 20),
+        legend.position = "top") +
   
-  plot_layout(guides = "collect",
-              widths = c(3.5,1.8)))
+  plot_layout(widths = c(2.5,1)); plot_GBM_panelA_fig2
 
 
 ggsave(filename = "results/figure2.tiff", device = "tiff", plot = plot_GBM_panelA_fig2,
@@ -858,8 +889,8 @@ ggsave(filename = "results/figure2.tiff", device = "tiff", plot = plot_GBM_panel
 # Figure 2 : GMM ----------------------------------------------------------
 
 
-GMM_BH_interaction <- clr_GMMs[GMMs.glm[GMMs.glm$`TreatmentWater:NestbuildingNNB Pr(>|t|).BH` < 0.2,"feature"],]
-GMM_BH_nestbuilding <- clr_GMMs[GMMs.glm[GMMs.glm$`NestbuildingNNB Pr(>|t|).BH` < 0.2, "feature"],]
+GMM_BH_interaction <- clr_GMMs[GMMs.glm[GMMs.glm$`TreatmentEscitalopram:NestbuildingLNB Pr(>|t|).BH` < 0.2,"feature"],]
+GMM_BH_nestbuilding <- clr_GMMs[GMMs.glm[GMMs.glm$`NestbuildingLNB Pr(>|t|).BH` < 0.2, "feature"],]
 GMM_BH_treatment <- clr_GMMs[GMMs.glm[GMMs.glm$`TreatmentWater Pr(>|t|)` < 0.2, "feature"],]
 
 
@@ -943,7 +974,7 @@ significant_gbm_of_interest <- gbm_values %>% pull(name) %>% unique() %>% as.cha
 gbm_significance <- GBMs.glm %>% 
   as_tibble() %>% 
   select(feature,
-         `TreatmentWater:NestbuildingNNB Estimate`,
+         `TreatmentEscitalopram:NestbuildingLNB Estimate`,
          `TreatmentWater Estimate`,
          `NestbuildingNNB Estimate`) %>% 
   filter(feature %in% significant_gbm_of_interest) %>% 
@@ -1051,7 +1082,7 @@ plot_GBM_panelA_fig2 <- (gbm_values %>%
 
 
 # Plot the GMM that show a group effect at q < 0.2
-GMM_BH_interaction <- clr_GMMs[GMMs.glm[GMMs.glm$`TreatmentWater:NestbuildingNNB Pr(>|t|).BH` < 0.2,"feature"],]
+GMM_BH_interaction <- clr_GMMs[GMMs.glm[GMMs.glm$`TreatmentEscitalopram:NestbuildingLNB Pr(>|t|).BH` < 0.2,"feature"],]
 
 GMM_BH_interaction %>%
   t() %>% 
@@ -1100,7 +1131,7 @@ GMM_BH_interaction %>%
 
 
 
-GMM_BH_nestbuilding <- clr_GMMs[GMMs.glm[GMMs.glm$`NestbuildingNNB Pr(>|t|).BH` < 0.2, "feature"],]
+GMM_BH_nestbuilding <- clr_GMMs[GMMs.glm[GMMs.glm$`NestbuildingLNB Pr(>|t|).BH` < 0.2, "feature"],]
                                         
 GMM_BH_nestbuilding %>% 
   t() %>% 
@@ -1165,13 +1196,13 @@ genus.glm = fw_glm(x = genus.exp,
 
 
 # Look at the distribution of p-values
-hist(genus.glm$`TreatmentWater:NestbuildingNNB Pr(>|t|)`, xlim = c(0, 1), breaks = 20)
-hist(genus.glm$`TreatmentWater:NestbuildingNNB Pr(>|t|).BH`, xlim = c(0, 1), breaks = 20)
+hist(genus.glm$`TreatmentEscitalopram:NestbuildingLNB Pr(>|t|)`, xlim = c(0, 1), breaks = 20)
+hist(genus.glm$`TreatmentEscitalopram:NestbuildingLNB Pr(>|t|).BH`, xlim = c(0, 1), breaks = 20)
 
 
 # Plot the strains that show a group effect at q < 0.4, because no lower q showed strains
-genBH <- genus.exp[genus.glm[genus.glm$`TreatmentWater:NestbuildingNNB Pr(>|t|).BH` < 0.2,"feature"],]
-#genBH <- genus.exp[genus.glm[genus.glm$`NestbuildingNNB Pr(>|t|).BH` < 0.2,"feature"],]
+genBH <- genus.exp[genus.glm[genus.glm$`TreatmentEscitalopram:NestbuildingLNB Pr(>|t|).BH` < 0.2,"feature"],]
+#genBH <- genus.exp[genus.glm[genus.glm$`NestbuildingLNB Pr(>|t|).BH` < 0.2,"feature"],]
 
 genBH %>%
   t() %>%
@@ -1224,45 +1255,45 @@ genBH %>%
 
 # # GBM : Interaction
 # png(filename = "results/histograms/GBM_interaction.png",width = 8, height = 6, units = "in", res = 300)
-# hist(GBMs.glm$`TreatmentWater:NestbuildingNNB Pr(>|t|).BH`, xlim = c(0, 1), breaks = 20)
+# hist(GBMs.glm$`TreatmentEscitalopram:NestbuildingLNB Pr(>|t|).BH`, xlim = c(0, 1), breaks = 20)
 # dev.off()
 # # GBM : Treatment
 # png(filename = "results/histograms/GBM_treatment.png", width = 8, height = 6, units = "in", res = 300)
-# hist(GBMs.glm$`TreatmentWater Pr(>|t|).BH`, xlim = c(0, 1), breaks = 20)
+# hist(GBMs.glm$`TreatmentEscitalopram Pr(>|t|).BH`, xlim = c(0, 1), breaks = 20)
 # dev.off()
 # # GBM : Nestbuilding
 # png(filename = "results/histograms/GBM_nestbuild.png", width = 8, height = 6, units = "in", res = 300)
-# hist(GBMs.glm$`NestbuildingNNB Pr(>|t|).BH`, xlim = c(0, 1), breaks = 20)
+# hist(GBMs.glm$`NestbuildingLNB Pr(>|t|).BH`, xlim = c(0, 1), breaks = 20)
 # dev.off()
 # 
 # 
 # 
 # # GMM : Interaction
 # png(filename = "results/histograms/GMM_interaction.png",width = 8, height = 6, units = "in", res = 300)
-# hist(GMMs.glm$`TreatmentWater:NestbuildingNNB Pr(>|t|).BH`, xlim = c(0, 1), breaks = 20)
+# hist(GMMs.glm$`TreatmentEscitalopram:NestbuildingLNB Pr(>|t|).BH`, xlim = c(0, 1), breaks = 20)
 # dev.off()
 # # GMM : Treatment
 # png(filename = "results/histograms/GMM_treatment.png", width = 8, height = 6, units = "in", res = 300)
-# hist(GMMs.glm$`TreatmentWater Pr(>|t|).BH`, xlim = c(0, 1), breaks = 20)
+# hist(GMMs.glm$`TreatmentEscitalopram Pr(>|t|).BH`, xlim = c(0, 1), breaks = 20)
 # dev.off()
 # # GMM : Nestbuilding
 # png(filename = "results/histograms/GMM_nestbuild.png", width = 8, height = 6, units = "in", res = 300)
-# hist(GMMs.glm$`NestbuildingNNB Pr(>|t|).BH`, xlim = c(0, 1), breaks = 20)
+# hist(GMMs.glm$`NestbuildingLNB Pr(>|t|).BH`, xlim = c(0, 1), breaks = 20)
 # dev.off()
 # 
 # 
 # 
 # # Genus : Interaction
 # png(filename = "results/histograms/GENUS_interaction.png",width = 8, height = 6, units = "in", res = 300)
-# hist(genus.glm$`TreatmentWater:NestbuildingNNB Pr(>|t|).BH`, xlim = c(0, 1), breaks = 20)
+# hist(genus.glm$`TreatmentEscitalopram:NestbuildingLNB Pr(>|t|).BH`, xlim = c(0, 1), breaks = 20)
 # dev.off()
 # # Genus : Treatment
 # png(filename = "results/histograms/GENUS_treatment.png", width = 8, height = 6, units = "in", res = 300)
-# hist(genus.glm$`TreatmentWater Pr(>|t|).BH`, xlim = c(0, 1), breaks = 20)
+# hist(genus.glm$`TreatmentEscitalopram Pr(>|t|).BH`, xlim = c(0, 1), breaks = 20)
 # dev.off()
 # # Genus : Nestbuilding
 # png(filename = "results/histograms/GENUS_nestbuild.png", width = 8, height = 6, units = "in", res = 300)
-# hist(genus.glm$`NestbuildingNNB Pr(>|t|).BH`, xlim = c(0, 1), breaks = 20)
+# hist(genus.glm$`NestbuildingLNB Pr(>|t|).BH`, xlim = c(0, 1), breaks = 20)
 # dev.off()
 
 
@@ -1315,16 +1346,16 @@ metabolomics.glm = fw_glm(x = metabol.exp,
 # Look at the distribution of p-values
 hist(metabolomics.glm$`PhenotypeNNB:TreatmentWater Pr(>|t|)`, xlim = c(0, 1), breaks = 20)
 
-hist(metabolomics.glm$`PhenotypeNNB:TreatmentWater Pr(>|t|).BH`, xlim = c(0, 1), breaks = 20)
+hist(metabolomics.glm$`PhenotypeNNB:TreatmentEscitalopram Pr(>|t|).BH`, xlim = c(0, 1), breaks = 20)
 hist(metabolomics.glm$`PhenotypeNNB Pr(>|t|).BH`, xlim = c(0, 1), breaks = 20)
-hist(metabolomics.glm$`TreatmentWater Pr(>|t|).BH`, xlim = c(0, 1), breaks = 20)
+hist(metabolomics.glm$`TreatmentEscitalopram Pr(>|t|).BH`, xlim = c(0, 1), breaks = 20)
 # After BH correction only Treatment threw significant results
 
 
 # Plot the strains that show a group effect at q < 0.4, because no lower q showed strains
-metabolBH<- metabol.exp[metabolomics.glm[metabolomics.glm$`PhenotypeNNB:TreatmentWater Pr(>|t|).BH` < 0.2,"feature"],]
+metabolBH<- metabol.exp[metabolomics.glm[metabolomics.glm$`PhenotypeNNB:TreatmentEscitalopram Pr(>|t|).BH` < 0.2,"feature"],]
 
-metabolBH <- metabol.exp[metabolomics.glm[metabolomics.glm$`TreatmentWater Pr(>|t|).BH` < 0.2,"feature"],]
+metabolBH <- metabol.exp[metabolomics.glm[metabolomics.glm$`TreatmentEscitalopram Pr(>|t|).BH` < 0.2,"feature"],]
 
 metabolBH %>% 
   t() %>%
@@ -1377,14 +1408,15 @@ metabolBH %>%
 
 library(anansi)
 
-GBM_BH <- clr_GBMs[GBMs.glm[GBMs.glm$`TreatmentWater:NestbuildingNNB Pr(>|t|).BH` < 0.2,"feature"],]
+GBM_BH <- clr_GBMs[GBMs.glm[GBMs.glm$`TreatmentEscitalopram:NestbuildingLNB Pr(>|t|).BH` < 0.2,"feature"],]
 
 #' The names in GBM_BH are in a format different from the one used in metabol.exp. We need to reformat them:
 #' 
 #' We first get the list of names that was used by Larissa to name the samples
 larissa_names <- metadata[metadata$Sample_ID %in% colnames(GBM_BH), "Larissa_ID"]
+
 # We use that list of names to rename the columns in the GBM_BH dataset
-colnames(GBM_BH) <- larissa_names
+colnames(GBM_BH) <- larissa_names %>% pull()
 
 # Change the "X" in the anmes in metabol.exp for a "L"
 new_metabol_names <- str_replace(colnames(metabol.exp), "X", "L")
@@ -1440,8 +1472,9 @@ anansiLong <- anansiLong[anansiLong$model_full_q.values < 0.1,]
 
 # Figure 3 ----------------------------------------------------------------
 
-plot_anansi_interaction <- anansiLong %>% 
-  filter(feature_Y == "Plasma 5HT") %>% 
+#plot_anansi_interaction <- 
+  anansiLong %>% 
+  #filter(feature_Y == "Plasma 5HT") %>% 
   mutate(type = str_replace(type, " ", "\n"),
          type = factor(x = type, levels = c("NNB\nWater", "NNB\nEscitalopram", "LNB\nWater", "LNB\nEscitalopram", "All")),
          feature_X = str_replace(feature_X, pattern = " \\(", replacement = "\n\\(")) %>% 
@@ -1490,7 +1523,7 @@ plot_anansi_interaction <- anansiLong %>%
         plot.title = element_text(size = 40, hjust = -0.1))
 
 
-
+ggsave(plot = last_plot(), filename = "all.jpg", height = 16, width = 12, units = "in")
 
 
 
